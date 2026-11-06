@@ -1,0 +1,19 @@
+# Bluefield overrides for the official frappe_docker pwd.yml (Foundation Step 5). Demo data only.
+#
+# pwd.yml is used unchanged from a pinned clone outside this repository (see FRAPPE_DOCKER_REF
+# in the Makefile). Compose merges this file on top of it:
+#   docker compose -p bluefield-erp -f ../frappe_docker/pwd.yml \
+#     -f infra/erpnext/compose.override.yml --env-file .env up -d
+# Use `make erp-up` rather than typing this by hand.
+#
+# Only one change is needed. pwd.yml publishes "8080:8080" on every network interface.
+# `!override` replaces that list (instead of appending to it) so ERPNext binds to 127.0.0.1 only,
+# on a port that can be changed in .env. Requires Docker Compose 2.24.4 or newer.
+#
+# MariaDB and Redis publish no ports in pwd.yml, so the only host port ERPNext uses is ERPNEXT_PORT.
+# The shared stack already uses 5432, 3000, 5678, 8025, and 1025.
+
+services:
+  frontend:
+    ports: !override
+      - "127.0.0.1:${ERPNEXT_PORT:-8080}:8080"

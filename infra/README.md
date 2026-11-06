@@ -3,6 +3,7 @@
 The reporting and automation stack for Bluefield Supply Co. (a fictional company; demo data only).
 It is defined in [`docker-compose.yml`](docker-compose.yml). ERPNext runs separately from the official
 [frappe_docker](https://github.com/frappe/frappe_docker) repository and is not part of this file.
+See [ERPNext](#erpnext) below.
 
 | Service | Image | URL (from the Codespace) | Purpose |
 | --- | --- | --- | --- |
@@ -87,3 +88,67 @@ The volumes still count toward the 15 GB storage allowance.
 | `port is already allocated` | Another process uses that port. Change `POSTGRES_PORT`, `METABASE_PORT`, `N8N_PORT`, `MAILPIT_UI_PORT`, or `MAILPIT_SMTP_PORT` in `.env`. |
 | n8n says saved credentials can't be decrypted | `N8N_ENCRYPTION_KEY` changed. Restore the old key, or reset the n8n data. |
 | You want a completely fresh stack | `docker compose -f infra/docker-compose.yml --env-file .env down -v` **deletes all stack data** (dashboards, workflows, emails, database), then `make up`. |
+
+## ERPNext
+
+ERPNext runs from the official frappe_docker demo file, `pwd.yml`, which is used unchanged.
+
+| Piece | Where it lives |
+| --- | --- |
+| frappe_docker clone | `../frappe_docker`, next to this repo and **outside it**, so it can never be committed. Override the path with `make erp-up FRAPPE_DOCKER_DIR=/some/other/path`. |
+| Pinned version | `FRAPPE_DOCKER_REF` in the [Makefile](../Makefile): frappe_docker commit `46c7ced` (2026-11-06), whose `pwd.yml` runs `frappe/erpnext:v16.54.0`, `mariadb:11.8`, and `redis:6.2-alpine` |
+| Bluefield override | [`erpnext/compose.override.yml`](erpnext/compose.override.yml) |
+| Compose project | `bluefield-erp`, which keeps its containers, volumes, and network separate from the `bluefield` stack |
+| URL | http://localhost:8080 (`ERPNEXT_PORT` in `.env`) |
+
+**Ports.** In `pwd.yml`, only the `frontend` (nginx) service publishes a port, `8080`, and it binds to every
+network interface. The override replaces that with `127.0.0.1:${ERPNEXT_PORT}`, so ERPNext follows the same
+localhost-only rule as the rest of the stack. MariaDB and Redis stay inside the Docker network. Port 8080
+doesn't clash with the stack's ports (5432, 3000, 5678, 8025, 1025). The override uses Compose's `!override`
+tag, which needs Docker Compose 2.24.4 or newer. `make erp-up` checks the version first.
+
+**Login.** `pwd.yml` creates the site with `Administrator` / `admin`. Right after the site is created,
+`make erp-up` replaces that password with `ERPNEXT_ADMIN_PASSWORD` from `.env`. The value is sent on stdin
+and never printed. The MariaDB root password in `pwd.yml` is still `admin`. That's acceptable only because
+the database can't be reached from outside the Docker network, and it's a known limitation of this
+disposable demo setup.
+
+### Start ERPNext
+
+From the repository root in the Codespace:
+
+```bash
+make env-secrets   # adds ERPNEXT_ADMIN_PASSWORD to .env and keeps the existing values
+make erp-up        # clone/pin frappe_docker, start, wait for create-site, set password, wait for /api/method/ping
+make erp-check     # live checks: ping, the .env password works, the default "admin" is rejected
+```
+
+The first `make erp-up` downloads the images and creates the site, which can take 5 to 10 minutes.
+It ends with `ERPNext is up: http://localhost:8080`.
+
+Then, in VS Code's **Ports** tab, open port 8080 and keep it **Private**. Log in as `Administrator` with
+`ERPNEXT_ADMIN_PASSWORD` (open `.env` yourself to copy it). Then finish the setup wizard with the company
+**Bluefield Supply Co.** This is a disposable demo site. Step 6's seed script recreates its data, so don't
+enter anything by hand that you need to keep.
+
+**Machine size.** ERPNext alone runs on the 2-core Codespace. To run it alongside the shared stack
+(`make up`), switch to the 4-core machine, and stop whichever you aren't using.
+
+| Command | What it does |
+| --- | --- |
+| `make erp-up` | Start ERPNext (safe to rerun; an existing site is kept) |
+| `make erp-ps` | Show each ERPNext service. `configurator` and `create-site` should be `Exited (0)` |
+| `make erp-logs` | Follow ERPNext logs |
+| `make erp-check` | Run the live checks in `tests/integration/test_erpnext.py` |
+| `make erp-down` | Stop and remove the ERPNext containers. Volumes (site and database) are kept |
+
+### ERPNext troubleshooting
+
+| Symptom | Likely cause and fix |
+| --- | --- |
+| `Docker Compose 2.24.4 or newer is needed` | Update Docker Compose. Codespaces images normally already have a newer version. |
+| `ERPNEXT_ADMIN_PASSWORD is blank in .env` | Run `make env-secrets`. |
+| `create-site failed` | Run `make erp-logs` and look at the `create-site` lines. It's usually a timeout waiting for MariaDB on a busy machine. Run `make erp-up` again. |
+| `port is already allocated` on 8080 | Something else uses 8080. Set `ERPNEXT_PORT` (and `ERPNEXT_URL`) in `.env` to a free port, then `make erp-up`. |
+| `checkout` error in `erp-clone` | The clone at `../frappe_docker` has local edits. This repo never edits it, so run `git -C ../frappe_docker status` and discard the changes. |
+| The setup wizard was finished wrong, or you want a fresh site | `docker compose -p bluefield-erp -f ../frappe_docker/pwd.yml -f infra/erpnext/compose.override.yml --env-file .env down -v` **deletes the ERPNext site and database**, then `make erp-up`. |
