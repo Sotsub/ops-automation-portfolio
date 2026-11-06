@@ -1,0 +1,2 @@
+# Use LF everywhere so the Makefile and scripts work in Linux (Codespaces, CI).
+* text=auto eol=lf
