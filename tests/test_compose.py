@@ -1,17 +1,23 @@
 """Static checks for the shared Docker stack. No Docker needed, so these run in CI."""
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+from tests.helpers import ROOT, env_example_values, make_targets, make_variable
+
 COMPOSE_PATH = ROOT / "infra" / "docker-compose.yml"
 INIT_SCRIPT = ROOT / "infra" / "postgres" / "init" / "10-bluefield.sh"
-ENV_EXAMPLE = ROOT / ".env.example"
 
 EXPECTED_SERVICES = {"postgres", "metabase", "n8n", "mailpit"}
+# None = no profile, so the service is part of the always-on core stack.
+EXPECTED_PROFILES = {
+    "postgres": None,
+    "mailpit": None,
+    "metabase": ["reporting"],
+    "n8n": ["automation"],
+}
 REPORTING_SCHEMAS = ["raw", "staging", "marts", "ops"]
 
 # ${VAR}, ${VAR:-default}, ${VAR:?error}, but not the escaped $${VAR} used inside containers.
@@ -36,18 +42,35 @@ def services(compose) -> dict:
     return compose["services"]
 
 
-def env_example_values() -> dict[str, str]:
-    values = {}
-    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, _, value = line.partition("=")
-            values[key.strip()] = value.strip()
-    return values
-
-
 def test_expected_services_only(services):
     assert set(services) == EXPECTED_SERVICES
+
+
+def test_services_are_in_the_expected_profiles(services):
+    for name, expected in EXPECTED_PROFILES.items():
+        assert services[name].get("profiles") == expected, f"{name}: wrong profiles"
+
+
+def test_profiled_services_depend_only_on_core(services):
+    # Compose does not start a dependency that sits behind a disabled profile.
+    for name, svc in services.items():
+        for dependency in svc.get("depends_on") or {}:
+            assert not services[dependency].get("profiles"), (
+                f"{name} depends on {dependency}, which must stay in the core (unprofiled) stack"
+            )
+
+
+def test_every_profile_has_make_targets_and_service_list(services):
+    targets = make_targets()
+    profiles = {p for svc in services.values() for p in svc.get("profiles") or []}
+    for profile in profiles:
+        assert {f"up-{profile}", f"stop-{profile}"} <= targets, f"missing make targets: {profile}"
+        in_profile = {n for n, s in services.items() if profile in (s.get("profiles") or [])}
+        listed = set(make_variable(f"{profile.upper()}_SERVICES").split())
+        assert listed == in_profile, f"{profile.upper()}_SERVICES is out of date"
+    all_profiles = make_variable("ALL_PROFILES").split()
+    assert set(all_profiles[1::2]) == profiles, "ALL_PROFILES must name every profile"
+    assert set(all_profiles[::2]) == {"--profile"}
 
 
 def test_images_are_pinned_to_exact_versions(services):

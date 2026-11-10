@@ -1,12 +1,15 @@
 """Live checks for the shared Docker stack (Foundation Step 5).
 
-Start the stack first with `make up`, then run `make check-stack`.
+Start the stack first with `make up` (core: Postgres, Mailpit), then run `make check-stack`.
+Metabase and n8n are in optional Compose profiles. Their checks are skipped when the service
+was not started (connection refused), and fail for any other error.
 Connection details come from .env. Passwords are never printed.
 """
 
 import json
 import smtplib
 import time
+import urllib.error
 import urllib.request
 import uuid
 from email.message import EmailMessage
@@ -89,15 +92,30 @@ def test_metabase_role_can_use_only_its_own_database(stack):
         connect(stack, "metabase", stack.metabase_db_password, stack.postgres_db)
 
 
+def http_get_profiled(url: str, service: str, start_with: str) -> tuple[int, bytes]:
+    """GET a service from an optional profile. Skip only if nothing is listening on its port."""
+    try:
+        return http_get(url)
+    except urllib.error.URLError as exc:
+        # HTTPError (4xx/5xx) is a URLError too, but its reason is a string, so it still fails.
+        if isinstance(exc.reason, ConnectionRefusedError):
+            pytest.skip(f"{service} is not running. Start it with `{start_with}`.")
+        raise
+
+
 def test_metabase_is_healthy(stack):
-    status, body = http_get(f"http://{HOST}:{stack.metabase_port}/api/health")
+    status, body = http_get_profiled(
+        f"http://{HOST}:{stack.metabase_port}/api/health", "Metabase", "make up-reporting"
+    )
     assert status == 200
     assert json.loads(body) == {"status": "ok"}
 
 
 def test_n8n_is_ready(stack):
     # Readiness is 200 only after n8n has connected to Postgres and run migrations.
-    status, _ = http_get(f"http://{HOST}:{stack.n8n_port}/healthz/readiness")
+    status, _ = http_get_profiled(
+        f"http://{HOST}:{stack.n8n_port}/healthz/readiness", "n8n", "make up-automation"
+    )
     assert status == 200
 
 

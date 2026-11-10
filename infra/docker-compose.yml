@@ -1,10 +1,17 @@
 # Bluefield Supply Co. shared stack (Foundation Step 5). Demo data only.
 #
 # Services: Postgres (reporting + app databases), Metabase, n8n, Mailpit.
-# ERPNext runs separately from the official frappe_docker repository.
+# ERPNext runs separately from the official frappe_docker repository (make erp-up).
 #
-# Start from the repository root:  make up
-# Without make:  docker compose -f infra/docker-compose.yml --env-file .env up -d --wait
+# Profiles keep the default stack small, to save Codespaces hours and memory:
+#   core        postgres, mailpit   no profile key, so always started   make up
+#   reporting   metabase                                                make up-reporting
+#   automation  n8n                                                     make up-automation
+#   everything                                                          make up-all
+# Core stays unprofiled on purpose: metabase and n8n depend on postgres, and Compose does not
+# start a dependency that sits behind a disabled profile.
+#
+# Without make:  docker compose -f infra/docker-compose.yml --env-file .env [--profile reporting] up -d --wait
 #
 # Rules this file follows (enforced by tests/test_compose.py):
 # - exact image versions, never "latest"
@@ -47,6 +54,7 @@ services:
 
   metabase:
     image: metabase/metabase:v0.64.5.4
+    profiles: [reporting]
     restart: unless-stopped
     depends_on:
       postgres:
@@ -77,6 +85,7 @@ services:
 
   n8n:
     image: docker.n8n.io/n8nio/n8n:2.46.6
+    profiles: [automation]
     restart: unless-stopped
     depends_on:
       postgres:
