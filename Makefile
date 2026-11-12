@@ -3,6 +3,12 @@
 
 COMPOSE_FILE := infra/docker-compose.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE) --env-file .env
+# Compose profiles (see infra/docker-compose.yml). Core (postgres, mailpit) has no profile and always runs.
+# ALL_PROFILES is spelled out instead of --profile "*" so it works on any Compose v2 release.
+REPORTING_SERVICES := metabase
+AUTOMATION_SERVICES := n8n
+ALL_PROFILES := --profile reporting --profile automation
+UP_WAIT := up -d --wait --wait-timeout 420
 SECRET_KEYS := POSTGRES_PASSWORD METABASE_DB_PASSWORD N8N_DB_PASSWORD MB_ENCRYPTION_SECRET_KEY N8N_ENCRYPTION_KEY ERPNEXT_ADMIN_PASSWORD
 
 # ERPNext runs from the official frappe_docker pwd.yml. The clone lives OUTSIDE this repository
@@ -17,11 +23,12 @@ ERP_MIN_COMPOSE := 2.24.4
 env_value = $$(sed -n 's/^$(1)=//p' .env | tail -n 1 | tr -d '\r')
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format test test-all up down logs ps check-stack db-init env-secrets check-compose \
-	erp-clone erp-preflight erp-up erp-down erp-logs erp-ps erp-check
+.PHONY: help setup lint format test test-all up up-reporting up-automation up-all stop-reporting \
+	stop-automation down logs ps check-stack db-init env-secrets check-compose \
+	erp-clone erp-preflight erp-pull erp-up erp-down erp-logs erp-ps erp-check
 
 help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 setup: ## Install Python 3.12 and all dependencies with uv
 	@uv python install 3.12
@@ -50,23 +57,39 @@ env-secrets: ## Fill blank stack secrets in .env with random values (never overw
 	@test -f .env || { cp .env.example .env; echo "Created .env from .env.example."; }
 	@if [ -n "$$(tail -c1 .env)" ]; then echo >> .env; fi
 	@for k in $(SECRET_KEYS); do \
-		v=$$(openssl rand -hex 32); \
+		v=$$(openssl rand -hex 32 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(32))'); \
+		test -n "$$v" || { echo "Could not generate a random value (need openssl or python3)."; exit 1; }; \
 		if grep -q "^$$k=." .env; then echo "$$k: already set, kept"; \
 		elif grep -q "^$$k=$$" .env; then sed -i "s|^$$k=$$|$$k=$$v|" .env; echo "$$k: generated"; \
 		else echo "$$k=$$v" >> .env; echo "$$k: generated"; fi; \
 	done
 
-up: check-compose ## Start the Docker stack and wait until every service is healthy
-	@$(COMPOSE) up -d --wait --wait-timeout 420
+up: check-compose ## Start the core stack only (Postgres, Mailpit) and wait until healthy
+	@$(COMPOSE) $(UP_WAIT)
 
-down: check-compose ## Stop the Docker stack (keeps data volumes)
-	@$(COMPOSE) down
+up-reporting: check-compose ## Start core + reporting profile (Metabase)
+	@$(COMPOSE) --profile reporting $(UP_WAIT)
 
-logs: check-compose ## Follow logs from the Docker stack
-	@$(COMPOSE) logs -f
+up-automation: check-compose ## Start core + automation profile (n8n)
+	@$(COMPOSE) --profile automation $(UP_WAIT)
 
-ps: check-compose ## Show each service and its health status
-	@$(COMPOSE) ps
+up-all: check-compose ## Start core + reporting + automation (use a 4-core Codespace with ERPNext)
+	@$(COMPOSE) $(ALL_PROFILES) $(UP_WAIT)
+
+stop-reporting: check-compose ## Stop the reporting profile only (Metabase); core keeps running
+	@$(COMPOSE) --profile reporting stop $(REPORTING_SERVICES)
+
+stop-automation: check-compose ## Stop the automation profile only (n8n); core keeps running
+	@$(COMPOSE) --profile automation stop $(AUTOMATION_SERVICES)
+
+down: check-compose ## Stop and remove every stack service, all profiles (keeps data volumes)
+	@$(COMPOSE) $(ALL_PROFILES) down
+
+logs: check-compose ## Follow logs from every running stack service
+	@$(COMPOSE) $(ALL_PROFILES) logs -f
+
+ps: check-compose ## Show each stack service (all profiles) and its health status
+	@$(COMPOSE) $(ALL_PROFILES) ps -a
 
 check-stack: ## Run the live checks against the running stack
 	@uv run pytest -m integration tests/integration/test_stack.py -v
@@ -98,8 +121,18 @@ erp-preflight:
 		echo "Docker Compose $(ERP_MIN_COMPOSE) or newer is needed (found: $${v:-none})."; exit 1; \
 	fi
 
-erp-up: erp-clone erp-preflight ## Start ERPNext, replace the default admin password, wait until it answers
-	@$(ERP_COMPOSE) up -d
+# pwd.yml uses one image for 8 services. Left to itself, `compose up` pulls it once per service in
+# parallel, and with Docker's containerd image store each pull unpacks its own copy of the layers,
+# which filled a 32 GB Codespace disk. So pull each distinct image once, skipping ones already here.
+erp-pull: erp-clone erp-preflight ## Download each ERPNext image once (skips images already present)
+	@for img in $$($(ERP_COMPOSE) config --images | sort -u); do \
+		docker image inspect "$$img" >/dev/null 2>&1 && continue; \
+		echo "Pulling $$img"; \
+		docker pull -q "$$img" >/dev/null || { echo "Could not pull $$img. Check the network and free disk (df -h /)."; exit 1; }; \
+	done
+
+erp-up: erp-pull ## Start ERPNext, replace the default admin password, wait until it answers
+	@$(ERP_COMPOSE) up -d --pull never
 	@echo "Waiting for create-site to finish. The first run takes several minutes (follow with: make erp-logs)."
 	@cid=$$($(ERP_COMPOSE) ps -a -q create-site); \
 	code=$$(timeout 900 docker wait "$$cid") || { echo "create-site did not finish within 15 minutes."; exit 1; }; \

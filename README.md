@@ -10,7 +10,7 @@ automation (n8n), and AI tools, and controls what the AI is allowed to do.
 
 | Part | Folder | Status |
 | --- | --- | --- |
-| Foundation | `infra/`, `erp/`, `shared/` | Repository scaffolded; shared stack defined (Postgres, Metabase, n8n, Mailpit) |
+| Foundation | `infra/`, `erp/`, `shared/`, `.devcontainer/` | Shared stack (Postgres, Metabase, n8n, Mailpit) and ERPNext run in Codespaces; Compose profiles and dev container added. ERPNext verified live, with the setup wizard done for Bluefield Supply Co. ([evidence](docs/evidence/foundation-erpnext.md)). Next: seed data |
 | 1. ERP-to-dashboard pipeline | `pipeline/` | Not started |
 | 2. AI reporting assistant | `assistant/` | Not started |
 | 3. Multi-system sync | `sync/` | Not started |
@@ -39,7 +39,10 @@ tests/      Test suite
 Requirements: [uv](https://docs.astral.sh/uv/) and Git. uv installs Python 3.12 itself.
 Docker is needed only from Foundation Step 5 onward.
 
-### GitHub Codespaces, Linux, or macOS
+### GitHub Codespaces (recommended), Linux, or macOS
+
+In a Codespace, the [dev container](.devcontainer/devcontainer.json) installs uv and Docker and runs
+`make setup` for you. Use the 2-core machine.
 
 ```bash
 make setup   # installs Python 3.12 and dependencies, creates .env from .env.example
@@ -49,18 +52,23 @@ make test
 
 Run `make help` to see every target.
 
-### Start the shared stack (Docker)
+### Start the Docker services
 
-Postgres, Metabase, n8n, and Mailpit run in Docker, ideally in GitHub Codespaces:
+Services are split into Compose profiles, so you run only what the current task needs:
 
 ```bash
-make env-secrets   # fill blank passwords and keys in .env with random values
-make up            # start everything and wait until it's healthy
-make check-stack   # live checks against the running services
-make down          # stop (data is kept)
+make env-secrets      # fill blank passwords and keys in .env with random values
+make up               # core: Postgres + Mailpit
+make up-reporting     # + Metabase      (make stop-reporting to stop it)
+make up-automation    # + n8n           (make stop-automation to stop it)
+make up-all           # all four stack services
+make erp-up           # ERPNext, from the official frappe_docker pwd.yml (make erp-down to stop it)
+make check-stack      # live stack checks; skips profiles that aren't running
+make down             # stop every stack service (data is kept)
 ```
 
-See [infra/README.md](infra/README.md) for URLs, the database layout, browser setup, and troubleshooting.
+See [infra/README.md](infra/README.md) for URLs, the database layout, browser setup, and troubleshooting,
+and [docs/free-tier-limits.md](docs/free-tier-limits.md) for how each command affects the free monthly allowances.
 
 ### Windows without make
 

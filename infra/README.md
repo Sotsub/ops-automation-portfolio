@@ -5,15 +5,34 @@ It is defined in [`docker-compose.yml`](docker-compose.yml). ERPNext runs separa
 [frappe_docker](https://github.com/frappe/frappe_docker) repository and is not part of this file.
 See [ERPNext](#erpnext) below.
 
-| Service | Image | URL (from the Codespace) | Purpose |
-| --- | --- | --- | --- |
-| Postgres | `postgres:18.6-alpine` | `localhost:5432` | Reporting database plus app databases for Metabase and n8n |
-| Metabase | `metabase/metabase:v0.64.5.4` | http://localhost:3000 | Dashboards |
-| n8n | `docker.n8n.io/n8nio/n8n:2.46.6` | http://localhost:5678 | Schedules and workflow automation |
-| Mailpit | `axllent/mailpit:v1.33.0` | http://localhost:8025 (SMTP on `localhost:1025`) | Catches test email; nothing is really sent |
+| Service | Profile | Image | URL (from the Codespace) | Purpose |
+| --- | --- | --- | --- | --- |
+| Postgres | core | `postgres:18.6-alpine` | `localhost:5432` | Reporting database plus app databases for Metabase and n8n |
+| Mailpit | core | `axllent/mailpit:v1.33.0` | http://localhost:8025 (SMTP on `localhost:1025`) | Catches test email; nothing is really sent |
+| Metabase | reporting | `metabase/metabase:v0.64.5.4` | http://localhost:3000 | Dashboards |
+| n8n | automation | `docker.n8n.io/n8nio/n8n:2.46.6` | http://localhost:5678 | Schedules and workflow automation |
+| ERPNext | erp | `frappe/erpnext:v16.54.0` (via frappe_docker) | http://localhost:8080 | The ERP. See [ERPNext](#erpnext) |
 
 Every port binds to `127.0.0.1`, so the services are reachable only from inside the Codespace (or
 through VS Code's private port forwarding). Image versions are pinned and were checked on 2026-11-06.
+
+## Profiles: start only what you need
+
+Every running service uses Codespaces hours and memory, so the default is the smallest stack. See
+[docs/free-tier-limits.md](../docs/free-tier-limits.md) for what each allowance covers.
+
+| Profile | Services | Start | Stop |
+| --- | --- | --- | --- |
+| core | Postgres, Mailpit | `make up` | `make down` (stops all profiles) |
+| reporting | Metabase | `make up-reporting` (also starts core) | `make stop-reporting` |
+| automation | n8n | `make up-automation` (also starts core) | `make stop-automation` |
+| erp | ERPNext | `make erp-up` | `make erp-down` |
+| everything but ERPNext | | `make up-all` | `make down` |
+
+Core services have no `profiles:` key in `docker-compose.yml`, so they always start. That's deliberate:
+Metabase and n8n depend on Postgres, and Compose won't start a dependency that sits behind a disabled
+profile. ERPNext isn't a Compose profile in this file. It runs from frappe_docker's `pwd.yml` as its own
+project, `bluefield-erp`, and the `erp-*` targets manage it the same way.
 
 ## How Postgres is laid out
 
@@ -30,22 +49,44 @@ Metabase and n8n can't connect to `bluefield` with their app logins. In Project 
 creates all of this. Postgres runs it automatically the first time it starts with an empty volume.
 It is safe to rerun with `make db-init`.
 
+## The Codespace (dev container)
+
+[`.devcontainer/devcontainer.json`](../.devcontainer/devcontainer.json) defines the Codespace, so a new one
+comes up ready to use:
+
+- Python 3.12 image (`mcr.microsoft.com/devcontainers/python:3.3.2-3.12-bookworm`)
+- Docker inside the container (`docker-in-docker:4.1.3`). Its data lives in a Docker volume that
+  survives container rebuilds.
+- uv `0.13.0`, the same version CI uses. `make setup` runs automatically after creation.
+- Labelled ports in the Ports tab: Metabase 3000, n8n 5678, Mailpit 8025, ERPNext 8080. They stay
+  **Private**. Postgres (5432) and SMTP (1025) are never auto-forwarded.
+- VS Code extensions: Python, Ruff, and Claude Code
+
+To start one, use VS Code's **Codespaces: Create New Codespace**, then pick this repository, branch `main`,
+and **2-core**. A Codespace created before this file existed doesn't pick it up automatically. Create a new
+one, then delete the old one, because both count toward the 15 GB storage allowance. Push any work first.
+The new Codespace starts with empty Docker volumes and no `.env`. Run `make env-secrets` and start fresh,
+and redo the browser setup below. All demo data is recreated by script, so nothing is lost.
+
 ## First-time setup
 
 Run these in the Codespace terminal from the repository root. The 2-core machine is enough for this stack.
 
 ```bash
-make setup         # Python deps; creates .env from .env.example if it's missing
+make setup         # already run by the dev container; safe to repeat
 make env-secrets   # fills blank stack passwords and keys in .env with random values
-make up            # starts all four services and waits until each one is healthy
+make up-all        # starts all four services and waits until each one is healthy
 make check-stack   # live checks: schemas, permissions, health endpoints, test email
 ```
+
+For daily work, `make up` (core only) is usually enough. `make check-stack` skips the Metabase and n8n
+checks when their profile isn't running, and fails if they're running but unhealthy.
 
 `make env-secrets` never prints secrets and never overwrites a value that's already set. If you already
 have a `.env` from an earlier step, it adds the missing keys. Copy any other new settings you want
 to change from `.env.example`. The defaults work without them.
 
-The first `make up` downloads the images and runs Metabase's database migrations, so it can take
+The first `make up-all` downloads the images and runs Metabase's database migrations, so it can take
 several minutes. Later starts are faster.
 
 ### Finish the browser setup
@@ -62,15 +103,18 @@ Store these admin passwords in a password manager, not in the repository.
 
 | Command | What it does |
 | --- | --- |
-| `make up` | Start the stack and wait for every health check |
-| `make ps` | Show each service and its health |
+| `make up` | Start the core profile (Postgres, Mailpit) and wait for its health checks |
+| `make up-reporting` / `make up-automation` | Add Metabase / n8n (core starts too) |
+| `make up-all` | Start every stack service |
+| `make stop-reporting` / `make stop-automation` | Stop just Metabase / n8n. Core keeps running |
+| `make ps` | Show each service in every profile, and its health |
 | `make logs` | Follow all logs (`Ctrl+C` to stop following) |
 | `make check-stack` | Run the live checks in `tests/integration/test_stack.py` |
-| `make down` | Stop and remove the containers. Data volumes are kept |
+| `make down` | Stop and remove the containers in every profile. Data volumes are kept |
 | `make db-init` | Rerun the Postgres init script after changing it |
 
 Without `make`, use `docker compose -f infra/docker-compose.yml --env-file .env <command>` from the
-repository root.
+repository root. Add `--profile reporting` or `--profile automation` to include those services.
 
 **Stop the stack, then stop the Codespace, when you finish.** A stopped Codespace uses no compute hours.
 The volumes still count toward the 15 GB storage allowance.
@@ -80,14 +124,15 @@ The volumes still count toward the 15 GB storage allowance.
 | Symptom | Likely cause and fix |
 | --- | --- |
 | `required variable POSTGRES_PASSWORD is missing a value` (or another secret) | Run `make env-secrets`. |
-| `make up` stops with `container ... is unhealthy` | Run `make ps` to find the service, then `docker compose -f infra/docker-compose.yml --env-file .env logs <service>`. |
+| `make up` (or `up-*`) stops with `container ... is unhealthy` | Run `make ps` to find the service, then `docker compose -f infra/docker-compose.yml --env-file .env logs <service>`. |
+| `make check-stack` shows Metabase or n8n as skipped | Their profile isn't running. Start it with `make up-reporting` or `make up-automation`, or use `make up-all`. |
 | Metabase takes a long time to become healthy | The first start runs migrations. Watch `make logs`. It's still working while the log keeps moving. On a 2-core machine, close other heavy services. |
 | Postgres logs mention `/var/lib/postgresql/data` or an old data format | Postgres 18 keeps data in `/var/lib/postgresql/18/docker`. An old volume from another major version won't load. Reset the volumes (below). |
 | `password authentication failed for user "metabase"` or `"n8n"` | `.env` changed after the volume was created. Run `make db-init` to apply the current passwords, then `docker compose -f infra/docker-compose.yml --env-file .env restart metabase n8n`. |
 | Schemas are missing after you edited the init script | Init scripts run only on an empty volume. Run `make db-init`. |
 | `port is already allocated` | Another process uses that port. Change `POSTGRES_PORT`, `METABASE_PORT`, `N8N_PORT`, `MAILPIT_UI_PORT`, or `MAILPIT_SMTP_PORT` in `.env`. |
 | n8n says saved credentials can't be decrypted | `N8N_ENCRYPTION_KEY` changed. Restore the old key, or reset the n8n data. |
-| You want a completely fresh stack | `docker compose -f infra/docker-compose.yml --env-file .env down -v` **deletes all stack data** (dashboards, workflows, emails, database), then `make up`. |
+| You want a completely fresh stack | `docker compose -f infra/docker-compose.yml --env-file .env --profile reporting --profile automation down -v` **deletes all stack data** (dashboards, workflows, emails, database), then `make up-all`. Include both `--profile` flags, or the Metabase and n8n containers keep running. |
 
 ## ERPNext
 
@@ -119,15 +164,17 @@ From the repository root in the Codespace:
 
 ```bash
 make env-secrets   # adds ERPNEXT_ADMIN_PASSWORD to .env and keeps the existing values
-make erp-up        # clone/pin frappe_docker, start, wait for create-site, set password, wait for /api/method/ping
+make erp-up        # clone/pin frappe_docker, pull each image once, start, wait for create-site, set password, wait for /api/method/ping
 make erp-check     # live checks: ping, the .env password works, the default "admin" is rejected
 ```
 
 The first `make erp-up` downloads the images and creates the site, which can take 5 to 10 minutes.
-It ends with `ERPNext is up: http://localhost:8080`.
+The ERPNext image is about 1 GB to download and 4.6 GB on disk, so check that `df -h /` shows at least
+6 GB free first. It ends with `ERPNext is up: http://localhost:8080`.
 
 Then, in VS Code's **Ports** tab, open port 8080 and keep it **Private**. Log in as `Administrator` with
-`ERPNEXT_ADMIN_PASSWORD` (open `.env` yourself to copy it). Then finish the setup wizard with the company
+`ERPNEXT_ADMIN_PASSWORD` (open `.env` yourself to copy it). The login form's **Email** box also accepts the
+username, so type `Administrator` there. Then finish the setup wizard with the company
 **Bluefield Supply Co.** This is a disposable demo site. Step 6's seed script recreates its data, so don't
 enter anything by hand that you need to keep.
 
@@ -137,6 +184,7 @@ enter anything by hand that you need to keep.
 | Command | What it does |
 | --- | --- |
 | `make erp-up` | Start ERPNext (safe to rerun; an existing site is kept) |
+| `make erp-pull` | Download each ERPNext image once and skip images already present. `make erp-up` runs it first |
 | `make erp-ps` | Show each ERPNext service. `configurator` and `create-site` should be `Exited (0)` |
 | `make erp-logs` | Follow ERPNext logs |
 | `make erp-check` | Run the live checks in `tests/integration/test_erpnext.py` |
@@ -149,6 +197,8 @@ enter anything by hand that you need to keep.
 | `Docker Compose 2.24.4 or newer is needed` | Update Docker Compose. Codespaces images normally already have a newer version. |
 | `ERPNEXT_ADMIN_PASSWORD is blank in .env` | Run `make env-secrets`. |
 | `create-site failed` | Run `make erp-logs` and look at the `create-site` lines. It's usually a timeout waiting for MariaDB on a busy machine. Run `make erp-up` again. |
+| `no space left on device` while pulling or extracting a layer | The disk is full. Check with `df -h /`. Stop the shared stack (`make down`), run `uv cache clean`, then `make erp-up` again. `make erp-pull` downloads each image once, because Compose on its own pulls the shared ERPNext image once per service, and with Docker's containerd image store each of those pulls unpacks its own copy. |
+| `Invalid Login` on the ERPNext login page | Only `Administrator` exists on a new site, and personal email or Google accounts don't work. Type `Administrator` in the Email box and use `ERPNEXT_ADMIN_PASSWORD` from `.env`. `make erp-check` confirms the password works. |
 | `port is already allocated` on 8080 | Something else uses 8080. Set `ERPNEXT_PORT` (and `ERPNEXT_URL`) in `.env` to a free port, then `make erp-up`. |
 | `checkout` error in `erp-clone` | The clone at `../frappe_docker` has local edits. This repo never edits it, so run `git -C ../frappe_docker status` and discard the changes. |
 | The setup wizard was finished wrong, or you want a fresh site | `docker compose -p bluefield-erp -f ../frappe_docker/pwd.yml -f infra/erpnext/compose.override.yml --env-file .env down -v` **deletes the ERPNext site and database**, then `make erp-up`. |

@@ -5,16 +5,14 @@ infra/erpnext/compose.override.yml. These tests check the parts this repo contro
 """
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+from tests.helpers import ROOT, env_example_values, make_rule, make_variable
+
 OVERRIDE_PATH = ROOT / "infra" / "erpnext" / "compose.override.yml"
 STACK_COMPOSE_PATH = ROOT / "infra" / "docker-compose.yml"
-MAKEFILE = ROOT / "Makefile"
-ENV_EXAMPLE = ROOT / ".env.example"
 
 PORT_VAR = re.compile(r"\$\{([A-Z][A-Z0-9_]*):-(\d+)\}")
 
@@ -29,23 +27,6 @@ def _tagged_sequence(loader, node):
 
 for _tag in ("!override", "!reset"):
     _ComposeLoader.add_constructor(_tag, _tagged_sequence)
-
-
-def env_example_values() -> dict[str, str]:
-    values = {}
-    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, _, value = line.partition("=")
-            values[key.strip()] = value.strip()
-    return values
-
-
-def make_variable(name: str) -> str:
-    text = MAKEFILE.read_text(encoding="utf-8")
-    match = re.search(rf"^{name}\s*[:?]?=\s*(.+)$", text, re.MULTILINE)
-    assert match, f"Makefile does not define {name}"
-    return match.group(1).strip()
 
 
 @pytest.fixture(scope="module")
@@ -105,3 +86,17 @@ def test_erpnext_uses_its_own_compose_project():
     assert '-f "$(FRAPPE_DOCKER_DIR)/pwd.yml" -f infra/erpnext/compose.override.yml' in erp_compose
     stack_name = yaml.safe_load(STACK_COMPOSE_PATH.read_text(encoding="utf-8"))["name"]
     assert stack_name != "bluefield-erp"
+
+
+def test_erp_pull_downloads_each_image_once():
+    # pwd.yml reuses one image across 8 services; pulling per service filled the Codespace disk.
+    prereqs, recipe = make_rule("erp-pull")
+    assert {"erp-clone", "erp-preflight"} <= set(prereqs)
+    assert "config --images | sort -u" in recipe
+    assert "docker image inspect" in recipe, "images already present must be skipped on rerun"
+
+
+def test_erp_up_pulls_first_and_never_lets_compose_pull():
+    prereqs, recipe = make_rule("erp-up")
+    assert "erp-pull" in prereqs
+    assert "up -d --pull never" in recipe
