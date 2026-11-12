@@ -100,3 +100,22 @@ def test_erp_up_pulls_first_and_never_lets_compose_pull():
     prereqs, recipe = make_rule("erp-up")
     assert "erp-pull" in prereqs
     assert "up -d --pull never" in recipe
+
+
+def test_erp_up_creates_the_encryption_key_before_restarting_the_web_workers():
+    # Otherwise each web worker generates its own key and API secrets fail to decrypt.
+    _, recipe = make_rule("erp-up")
+    key = recipe.index("frappe.utils.password.get_encryption_key")
+    restart = recipe.index("restart backend")
+    assert recipe.index("docker wait") < key < restart < recipe.index("restart frontend")
+    assert restart < recipe.index("erp-setup"), "set up the site only after the workers restart"
+
+
+def test_erp_setup_uses_the_committed_wizard_answers():
+    import json
+
+    answers = json.loads((ROOT / make_variable("ERP_SETUP_FILE")).read_text(encoding="utf-8"))
+    assert (answers["country"], answers["currency"]) == ("United States", "USD")
+    assert answers["company_name"] == "Bluefield Supply Co."
+    _, recipe = make_rule("erp-setup")
+    assert "setup_wizard.setup_complete" in recipe and "frappe.is_setup_complete" in recipe

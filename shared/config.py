@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     ai_model: str | None = None
     ai_api_key: SecretStr | None = None
 
+    # ERPNext. The admin password is used only to create the integration user and its API key.
+    # Every other script signs in with the API key (`make erp-api-keys` writes it to .env).
+    erpnext_url: str = "http://localhost:8080"
+    erpnext_admin_password: SecretStr | None = None
+    erpnext_api_key: SecretStr | None = None
+    erpnext_api_secret: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

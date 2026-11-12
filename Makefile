@@ -19,13 +19,14 @@ FRAPPE_DOCKER_REF := 46c7ced81efbd4a119e14b81bf78e3b77cad3309
 ERP_PROJECT := bluefield-erp
 ERP_COMPOSE := docker compose -p $(ERP_PROJECT) -f "$(FRAPPE_DOCKER_DIR)/pwd.yml" -f infra/erpnext/compose.override.yml --env-file .env
 ERP_MIN_COMPOSE := 2.24.4
+ERP_SETUP_FILE := infra/erpnext/setup_wizard.json
 # Shell snippet that reads one key from .env without sourcing the file or printing the value.
 env_value = $$(sed -n 's/^$(1)=//p' .env | tail -n 1 | tr -d '\r')
 
 .DEFAULT_GOAL := help
 .PHONY: help setup lint format test test-all up up-reporting up-automation up-all stop-reporting \
 	stop-automation down logs ps check-stack db-init env-secrets check-compose \
-	erp-clone erp-preflight erp-pull erp-up erp-down erp-logs erp-ps erp-check
+	erp-clone erp-preflight erp-pull erp-up erp-setup erp-api-keys erp-seed erp-seed-check erp-down erp-logs erp-ps erp-check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -131,6 +132,11 @@ erp-pull: erp-clone erp-preflight ## Download each ERPNext image once (skips ima
 		docker pull -q "$$img" >/dev/null || { echo "Could not pull $$img. Check the network and free disk (df -h /)."; exit 1; }; \
 	done
 
+# A new site has no encryption_key until something needs one, and Frappe's web workers each cache
+# the site config (get_site_config(cached=is_request)). So the first API key made through the web
+# had several workers each generate and save their own key, and the secret then failed to decrypt.
+# Fix: create the key once with bench, then restart the backend so every worker reads it. The
+# frontend proxy is restarted after it so it picks up the backend's new address.
 erp-up: erp-pull ## Start ERPNext, replace the default admin password, wait until it answers
 	@$(ERP_COMPOSE) up -d --pull never
 	@echo "Waiting for create-site to finish. The first run takes several minutes (follow with: make erp-logs)."
@@ -139,6 +145,10 @@ erp-up: erp-pull ## Start ERPNext, replace the default admin password, wait unti
 	if [ "$$code" != "0" ]; then \
 		echo "create-site failed (exit $$code). Check: make erp-logs"; exit 1; \
 	fi
+	@$(ERP_COMPOSE) exec -T backend bench --site frontend execute frappe.utils.password.get_encryption_key >/dev/null \
+		|| { echo "Could not create the site's encryption key. Check: make erp-logs"; exit 1; }
+	@$(ERP_COMPOSE) restart backend >/dev/null 2>&1 && $(ERP_COMPOSE) restart frontend >/dev/null 2>&1 \
+		|| { echo "Could not restart the ERPNext web services. Check: make erp-ps"; exit 1; }
 	@# The password goes in on stdin, so it never appears in this terminal or in host process arguments.
 	@printf '%s\n' "$(call env_value,ERPNEXT_ADMIN_PASSWORD)" \
 		| $(ERP_COMPOSE) exec -T backend bash -c \
@@ -146,12 +156,33 @@ erp-up: erp-pull ## Start ERPNext, replace the default admin password, wait unti
 	@echo "Administrator password set from .env (pwd.yml's default 'admin' no longer works)."
 	@port="$(call env_value,ERPNEXT_PORT)"; port=$${port:-8080}; \
 	for i in $$(seq 1 60); do \
-		if curl -fsS "http://127.0.0.1:$$port/api/method/ping" 2>/dev/null | grep -q pong; then \
-			echo "ERPNext is up: http://localhost:$$port (log in as Administrator)"; exit 0; \
-		fi; \
+		if curl -fsS "http://127.0.0.1:$$port/api/method/ping" 2>/dev/null | grep -q pong; then exit 0; fi; \
 		sleep 10; \
 	done; \
 	echo "ERPNext did not answer on port $$port within 10 minutes. Check: make erp-logs"; exit 1
+	@$(MAKE) --no-print-directory erp-setup
+	@port="$(call env_value,ERPNEXT_PORT)"; echo "ERPNext is up: http://localhost:$${port:-8080} (log in as Administrator)"
+
+# Answers the setup wizard from a file, so a new site is always the same US company in USD.
+# ERPNext's setup_complete() returns early when setup is already done, so this is safe to rerun.
+erp-setup: erp-clone erp-preflight ## Finish ERPNext's setup wizard from infra/erpnext/setup_wizard.json (skips if done)
+	@args=$$(python3 -c 'import json, sys; print(json.dumps({"args": json.load(open(sys.argv[1]))}))' $(ERP_SETUP_FILE)) \
+		|| { echo "Could not read $(ERP_SETUP_FILE)."; exit 1; }; \
+	$(ERP_COMPOSE) exec -T backend bench --site frontend execute \
+		frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs "$$args" >/dev/null \
+		|| { echo "The setup wizard failed. Check: make erp-logs"; exit 1; }
+	@done=$$($(ERP_COMPOSE) exec -T backend bench --site frontend execute frappe.is_setup_complete 2>/dev/null | tail -n 1); \
+	test "$$done" = "true" || { echo "Setup is still not complete. Check: make erp-logs"; exit 1; }
+	@echo "ERPNext setup is complete (answers from $(ERP_SETUP_FILE))."
+
+erp-api-keys: ## Create the ERPNext integration user and write its API key to .env (never printed)
+	@uv run python -m erp.api_user
+
+erp-seed: ## Load the fictional Bluefield demo data into ERPNext (safe to rerun; ARGS="--dry-run" to preview)
+	@uv run python -m erp.seed $(ARGS)
+
+erp-seed-check: ## Run the live checks on the seeded data in tests/integration/test_erp_seed.py
+	@uv run pytest -m integration tests/integration/test_erp_seed.py -v
 
 erp-down: erp-clone ## Stop ERPNext (keeps its volumes and data)
 	@$(ERP_COMPOSE) down

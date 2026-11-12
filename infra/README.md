@@ -164,9 +164,11 @@ From the repository root in the Codespace:
 
 ```bash
 make env-secrets   # adds ERPNEXT_ADMIN_PASSWORD to .env and keeps the existing values
-make erp-up        # clone/pin frappe_docker, pull each image once, start, wait for create-site, set password, wait for /api/method/ping
+make erp-up        # clone/pin frappe_docker, pull each image once, start, create the site, set password, run the setup wizard
 make erp-check     # live checks: ping, the .env password works, the default "admin" is rejected
 ```
+
+To load the demo data next, see [`erp/README.md`](../erp/README.md) (`make erp-api-keys`, then `make erp-seed`).
 
 The first `make erp-up` downloads the images and creates the site, which can take 5 to 10 minutes.
 The ERPNext image is about 1 GB to download and 4.6 GB on disk, so check that `df -h /` shows at least
@@ -174,9 +176,12 @@ The ERPNext image is about 1 GB to download and 4.6 GB on disk, so check that `d
 
 Then, in VS Code's **Ports** tab, open port 8080 and keep it **Private**. Log in as `Administrator` with
 `ERPNEXT_ADMIN_PASSWORD` (open `.env` yourself to copy it). The login form's **Email** box also accepts the
-username, so type `Administrator` there. Then finish the setup wizard with the company
-**Bluefield Supply Co.** This is a disposable demo site. Step 6's seed script recreates its data, so don't
-enter anything by hand that you need to keep.
+username, so type `Administrator` there.
+
+You don't need to click through ERPNext's setup wizard. `make erp-up` runs `make erp-setup`, which
+answers it from [`erpnext/setup_wizard.json`](erpnext/setup_wizard.json): **Bluefield Supply Co.**, United
+States, USD, America/New_York time, with the Accounting and Stock modules. This is a disposable demo
+site that the seed script fills, so don't enter anything by hand that you need to keep.
 
 **Machine size.** ERPNext alone runs on the 2-core Codespace. To run it alongside the shared stack
 (`make up`), switch to the 4-core machine, and stop whichever you aren't using.
@@ -185,6 +190,10 @@ enter anything by hand that you need to keep.
 | --- | --- |
 | `make erp-up` | Start ERPNext (safe to rerun; an existing site is kept) |
 | `make erp-pull` | Download each ERPNext image once and skip images already present. `make erp-up` runs it first |
+| `make erp-setup` | Answer the setup wizard from `erpnext/setup_wizard.json`. Does nothing if setup is already done. `make erp-up` runs it |
+| `make erp-api-keys` | Create the integration user and write its API key to `.env` (see [`erp/README.md`](../erp/README.md)) |
+| `make erp-seed` | Load the fictional demo data (see [`erp/README.md`](../erp/README.md)) |
+| `make erp-seed-check` | Run the live checks on the seeded data in `tests/integration/test_erp_seed.py` |
 | `make erp-ps` | Show each ERPNext service. `configurator` and `create-site` should be `Exited (0)` |
 | `make erp-logs` | Follow ERPNext logs |
 | `make erp-check` | Run the live checks in `tests/integration/test_erpnext.py` |
@@ -201,4 +210,4 @@ enter anything by hand that you need to keep.
 | `Invalid Login` on the ERPNext login page | Only `Administrator` exists on a new site, and personal email or Google accounts don't work. Type `Administrator` in the Email box and use `ERPNEXT_ADMIN_PASSWORD` from `.env`. `make erp-check` confirms the password works. |
 | `port is already allocated` on 8080 | Something else uses 8080. Set `ERPNEXT_PORT` (and `ERPNEXT_URL`) in `.env` to a free port, then `make erp-up`. |
 | `checkout` error in `erp-clone` | The clone at `../frappe_docker` has local edits. This repo never edits it, so run `git -C ../frappe_docker status` and discard the changes. |
-| The setup wizard was finished wrong, or you want a fresh site | `docker compose -p bluefield-erp -f ../frappe_docker/pwd.yml -f infra/erpnext/compose.override.yml --env-file .env down -v` **deletes the ERPNext site and database**, then `make erp-up`. |
+| You want a fresh site, for example after changing `erpnext/setup_wizard.json` | `docker compose -p bluefield-erp -f ../frappe_docker/pwd.yml -f infra/erpnext/compose.override.yml --env-file .env down -v` **deletes the ERPNext site and database**. Then run `make erp-up` (setup runs automatically), `make erp-api-keys` and `make erp-seed`. |
