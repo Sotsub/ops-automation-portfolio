@@ -5,6 +5,7 @@ description = "Workflow automation portfolio for Bluefield Supply Co., a fiction
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "httpx>=0.28.1",
     "psycopg[binary]>=3.3.8",
     "pydantic-settings>=2.16.2",
 ]
@@ -26,6 +27,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Demo-data tables keep one record per line so they read like a spreadsheet.
+"erp/seed_data.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,19 @@
+{
+  "language": "English",
+  "country": "United States",
+  "timezone": "America/New_York",
+  "currency": "USD",
+  "company_name": "Bluefield Supply Co.",
+  "company_abbr": "BSC",
+  "chart_of_accounts": "Standard",
+  "fy_start_date": "2026-01-01",
+  "fy_end_date": "2026-12-31",
+  "persona_industry": "Distribution",
+  "persona_implementing_for": "My own company",
+  "persona_company_size": "11-50",
+  "persona_current_system": "Spreadsheets",
+  "module_accounting": 1,
+  "module_stock": 1,
+  "module_manufacturing": 0,
+  "module_projects": 0
+}
