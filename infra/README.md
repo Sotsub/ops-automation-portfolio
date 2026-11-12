@@ -44,8 +44,9 @@ One Postgres server holds three databases, each with its own login:
 | `metabase` | `metabase` | Metabase's own settings, users, and saved dashboards |
 | `n8n` | `n8n` | n8n's workflows, credentials, and execution history |
 
-Metabase and n8n can't connect to `bluefield` with their app logins. In Project 1, Metabase reads the
-`marts` schema through a separate read-only user. [`postgres/init/10-bluefield.sh`](postgres/init/10-bluefield.sh)
+Metabase and n8n can't connect to `bluefield` with their app logins. Metabase reads the `marts` schema
+through `reporting_reader`, a read-only login that can't see `raw`, `staging` or `ops` (see
+[`pipeline/README.md`](../pipeline/README.md)). [`postgres/init/10-bluefield.sh`](postgres/init/10-bluefield.sh)
 creates all of this. Postgres runs it automatically the first time it starts with an empty volume.
 It is safe to rerun with `make db-init`.
 
@@ -92,8 +93,10 @@ several minutes. Later starts are faster.
 ### Finish the browser setup
 
 1. Open the **Ports** tab in VS Code and open ports 3000, 5678, and 8025. Leave their visibility **Private**.
-2. **Metabase (3000):** Create the admin account. When it asks you to add data, choose **I'll add my
-   data later**. Project 1 connects it to `marts` with a read-only user.
+2. **Metabase (3000):** Don't create the admin account by hand. Run `make dashboards`. It finishes
+   Metabase's setup with `METABASE_ADMIN_EMAIL` and `METABASE_ADMIN_PASSWORD` from `.env`, connects it to
+   `marts` as the read-only `reporting_reader`, and builds the dashboards (see
+   [`pipeline/README.md`](../pipeline/README.md)). Then sign in with that email and password.
 3. **n8n (5678):** Create the owner account.
 4. **Mailpit (8025):** No login. The check email from `make check-stack` should be in the inbox.
 
