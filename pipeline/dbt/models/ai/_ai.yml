@@ -1,0 +1,28 @@
+version: 2
+
+# The only data the AI assistant can read (as ai_reader). Each view selects named columns from a
+# tested mart, so nothing new is calculated here and no contact details are exposed.
+models:
+  - name: ai_kpi_summary
+    description: "Approved for the AI assistant: headline figures. Demo data only."
+  - name: ai_sales_monthly
+    description: "Approved for the AI assistant: monthly sales by group, region and product group. Demo data only."
+  - name: ai_customers
+    description: "Approved for the AI assistant: customer revenue and payment habits, without contact details. Demo data only."
+    columns:
+      - name: customer_name
+        data_tests: [unique, not_null]
+  - name: ai_open_invoices
+    description: "Approved for the AI assistant: unpaid sales invoices and days overdue. Demo data only."
+    columns:
+      - name: invoice_id
+        data_tests: [unique, not_null]
+  - name: ai_ar_aging
+    description: "Approved for the AI assistant: receivables per aging bucket. Demo data only."
+  - name: ai_inventory_status
+    description: "Approved for the AI assistant: stock against reorder level. Demo data only."
+    columns:
+      - name: item_code
+        data_tests: [unique, not_null]
+  - name: ai_supplier_spend_monthly
+    description: "Approved for the AI assistant: supplier bills per month. Demo data only."

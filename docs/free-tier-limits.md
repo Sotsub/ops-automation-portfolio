@@ -39,6 +39,8 @@ decides the machine size.
 | `make up-reporting` | Core + Metabase | Building dashboards | 2-core |
 | `make up-automation` | Core + n8n | Building workflows | 2-core |
 | `make erp-up` | ERPNext (separate project) | Seeding, extract development, demos | 2-core on its own |
+| `make ask Q="..."` | Nothing (needs Postgres up) | One assistant question: about 2-4 Gemini free-tier requests | 2-core |
+| `make assistant-eval` | Nothing (needs Postgres up) | 14 test questions: about 35 Gemini requests over 5 minutes. Run it after changing the assistant, not on every commit | 2-core |
 | `make up-all` + `make erp-up` | Everything | Full end-to-end demo or video recording | **4-core** (uses hours twice as fast) |
 
 Stop what you aren't using: `make stop-reporting`, `make stop-automation`, `make down` (whole stack),

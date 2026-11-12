@@ -40,12 +40,13 @@ One Postgres server holds three databases, each with its own login:
 
 | Database | Owner / login | Contents |
 | --- | --- | --- |
-| `bluefield` | `bluefield_admin` | Business data in schemas `raw`, `staging`, `marts`, `ops` |
+| `bluefield` | `bluefield_admin` | Business data in schemas `raw`, `staging`, `marts`, `ops`, and the approved `ai` views |
 | `metabase` | `metabase` | Metabase's own settings, users, and saved dashboards |
 | `n8n` | `n8n` | n8n's workflows, credentials, and execution history |
 
 Metabase and n8n can't connect to `bluefield` with their app logins. Metabase reads the `marts` schema
-through `reporting_reader`, a read-only login that can't see `raw`, `staging` or `ops` (see
+through `reporting_reader`, and the AI assistant reads the approved `ai` views through `ai_reader`.
+Both logins are read-only and can't see `raw`, `staging` or `ops` (see [`assistant/README.md`](../assistant/README.md) and
 [`pipeline/README.md`](../pipeline/README.md)). [`postgres/init/10-bluefield.sh`](postgres/init/10-bluefield.sh)
 creates all of this. Postgres runs it automatically the first time it starts with an empty volume.
 It is safe to rerun with `make db-init`.

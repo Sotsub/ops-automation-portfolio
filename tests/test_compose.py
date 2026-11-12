@@ -18,7 +18,7 @@ EXPECTED_PROFILES = {
     "metabase": ["reporting"],
     "n8n": ["automation"],
 }
-REPORTING_SCHEMAS = ["raw", "staging", "marts", "ops"]
+REPORTING_SCHEMAS = ["raw", "staging", "marts", "ops", "ai"]
 
 # ${VAR}, ${VAR:-default}, ${VAR:?error}, but not the escaped $${VAR} used inside containers.
 COMPOSE_VAR = re.compile(r"(?<!\$)\$\{([A-Z][A-Z0-9_]*)")
@@ -161,3 +161,14 @@ def test_init_script_creates_a_read_only_marts_reader():
         assert not re.search(rf"GRANT[^;]*SCHEMA[^;]*\b{schema}\b[^;]*TO reporting_reader", sql), (
             schema
         )
+
+
+def test_init_script_creates_a_read_only_ai_reader_for_approved_views():
+    sql = INIT_SCRIPT.read_text(encoding="utf-8")
+    assert "CREATE SCHEMA IF NOT EXISTS ai;" in sql
+    assert "PASSWORD :'ai_pw'" in sql
+    assert "ALTER ROLE ai_reader SET default_transaction_read_only = on;" in sql
+    assert "ALTER ROLE ai_reader SET statement_timeout = '5s';" in sql
+    assert "GRANT USAGE ON SCHEMA ai TO ai_reader;" in sql
+    for schema in ("raw", "staging", "marts", "ops"):
+        assert not re.search(rf"GRANT[^;]*SCHEMA[^;]*\b{schema}\b[^;]*TO ai_reader", sql), schema

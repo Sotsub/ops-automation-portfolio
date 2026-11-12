@@ -10,7 +10,7 @@ AUTOMATION_SERVICES := n8n
 ALL_PROFILES := --profile reporting --profile automation
 UP_WAIT := up -d --wait --wait-timeout 420
 SECRET_KEYS := POSTGRES_PASSWORD METABASE_DB_PASSWORD N8N_DB_PASSWORD MB_ENCRYPTION_SECRET_KEY N8N_ENCRYPTION_KEY ERPNEXT_ADMIN_PASSWORD \
-	REPORTING_READER_PASSWORD METABASE_ADMIN_PASSWORD
+	REPORTING_READER_PASSWORD METABASE_ADMIN_PASSWORD AI_READER_PASSWORD
 
 # ERPNext runs from the official frappe_docker pwd.yml. The clone lives OUTSIDE this repository
 # (next to it by default), so it can never be committed here.
@@ -27,7 +27,7 @@ env_value = $$(sed -n 's/^$(1)=//p' .env | tail -n 1 | tr -d '\r')
 .DEFAULT_GOAL := help
 .PHONY: help setup lint format test test-all up up-reporting up-automation up-all stop-reporting \
 	stop-automation down logs ps check-stack db-init env-secrets check-compose \
-	erp-clone erp-preflight erp-pull erp-up erp-setup erp-api-keys erp-seed erp-seed-check pipeline-run pipeline-check dashboards dashboards-check erp-down erp-logs erp-ps erp-check
+	erp-clone erp-preflight erp-pull erp-up erp-setup erp-api-keys erp-seed erp-seed-check pipeline-run pipeline-check dashboards dashboards-check ask assistant-eval assistant-check erp-down erp-logs erp-ps erp-check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -210,3 +210,15 @@ dashboards: ## Create or update the Project 1 Metabase dashboards (needs make up
 
 dashboards-check: ## Run the live dashboard checks (Metabase figures equal the marts)
 	@uv run pytest -m integration tests/integration/test_dashboards.py -v
+
+# --- Project 2: AI reporting assistant --------------------------------------------------------------
+
+ask: ## Ask the AI reporting assistant a question: make ask Q="Who pays late most often?"
+	@test -n "$(Q)" || { echo 'Usage: make ask Q="your question"'; exit 1; }
+	@uv run python -m assistant.ask "$(Q)"
+
+assistant-eval: ## Run the assistant's evaluation questions against the live model (uses free-tier quota)
+	@uv run python -m assistant.eval $(ARGS)
+
+assistant-check: ## Run the live checks on the assistant's data access (no AI model needed)
+	@uv run pytest -m integration tests/integration/test_assistant.py -v
