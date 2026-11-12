@@ -30,3 +30,9 @@ models:
       # Dashboards connect as reporting_reader, which may read marts and nothing else.
       +grants:
         select: ["reporting_reader"]
+    ai:
+      # Approved views for the AI assistant (Project 2). ai_reader can read these and nothing else.
+      +schema: ai
+      +materialized: view
+      +grants:
+        select: ["ai_reader"]

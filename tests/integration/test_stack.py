@@ -22,7 +22,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 pytestmark = pytest.mark.integration
 
 HOST = "127.0.0.1"
-REPORTING_SCHEMAS = {"raw", "staging", "marts", "ops"}
+REPORTING_SCHEMAS = {"raw", "staging", "marts", "ops", "ai"}
 
 
 class StackSettings(BaseSettings):

@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     postgres_user: str = "bluefield_admin"
     postgres_password: SecretStr | None = None
     reporting_reader_password: SecretStr | None = None
+    # The AI assistant reads the approved views in the ai schema as ai_reader (Project 2).
+    ai_reader_password: SecretStr | None = None
 
     # Metabase (dashboards). `make dashboards` creates this admin on first run.
     metabase_port: int = 3000

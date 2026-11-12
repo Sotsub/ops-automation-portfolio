@@ -37,6 +37,8 @@ services:
       N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:?Set N8N_DB_PASSWORD in .env (run make env-secrets)}
       # Read-only login for the marts schema (Metabase reads reports through it).
       REPORTING_READER_PASSWORD: ${REPORTING_READER_PASSWORD:?Set REPORTING_READER_PASSWORD in .env (run make env-secrets)}
+      # Read-only login for the ai schema (the AI assistant reads approved views through it).
+      AI_READER_PASSWORD: ${AI_READER_PASSWORD:?Set AI_READER_PASSWORD in .env (run make env-secrets)}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
