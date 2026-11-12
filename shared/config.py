@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     postgres_password: SecretStr | None = None
     reporting_reader_password: SecretStr | None = None
 
+    # Metabase (dashboards). `make dashboards` creates this admin on first run.
+    metabase_port: int = 3000
+    metabase_admin_email: str = "admin@example.com"
+    metabase_admin_password: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
