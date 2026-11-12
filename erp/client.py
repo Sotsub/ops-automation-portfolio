@@ -113,18 +113,25 @@ class ErpClient:
         doctype: str,
         fields: Iterable[str] = ("name",),
         filters: list[list[Any]] | None = None,
+        parent: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return every matching record, fetching PAGE_SIZE at a time."""
+        """Return every matching record, fetching PAGE_SIZE at a time.
+
+        For a child table (such as "Sales Invoice Item"), pass the parent doctype as `parent`.
+        Rows are ordered by creation, then name, so paging is stable even when timestamps tie.
+        """
         rows: list[dict[str, Any]] = []
         while True:
             params = {
                 "fields": json.dumps(list(fields)),
                 "limit_start": len(rows),
                 "limit_page_length": PAGE_SIZE,
-                "order_by": "creation asc",
+                "order_by": "creation asc, name asc",
             }
             if filters:
                 params["filters"] = json.dumps(filters)
+            if parent:
+                params["parent"] = parent
             page = self._get(f"/api/resource/{quote(doctype)}", params)["data"]
             rows.extend(page)
             if len(page) < PAGE_SIZE:

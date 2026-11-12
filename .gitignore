@@ -30,3 +30,9 @@ docs/Build_Guide.md
 
 # Claude Code personal overrides
 .claude/settings.local.json
+
+# dbt build output (pipeline/dbt)
+pipeline/dbt/target/
+pipeline/dbt/logs/
+pipeline/dbt/dbt_packages/
+pipeline/dbt/.user.yml

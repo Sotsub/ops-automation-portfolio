@@ -148,3 +148,16 @@ def test_init_script_has_no_inline_passwords():
     assert not re.search(r"PASSWORD\s+'", sql, re.IGNORECASE)
     assert "PASSWORD :'metabase_pw'" in sql
     assert "PASSWORD :'n8n_pw'" in sql
+
+
+def test_init_script_creates_a_read_only_marts_reader():
+    sql = INIT_SCRIPT.read_text(encoding="utf-8")
+    assert "PASSWORD :'reader_pw'" in sql
+    assert "SET default_transaction_read_only = on" in sql
+    assert "GRANT USAGE ON SCHEMA marts TO reporting_reader;" in sql
+    assert "GRANT SELECT ON ALL TABLES IN SCHEMA marts TO reporting_reader;" in sql
+    assert "IN SCHEMA marts GRANT SELECT ON TABLES TO reporting_reader" in sql
+    for schema in ("raw", "staging", "ops"):
+        assert not re.search(rf"GRANT[^;]*SCHEMA[^;]*\b{schema}\b[^;]*TO reporting_reader", sql), (
+            schema
+        )

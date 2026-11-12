@@ -9,7 +9,8 @@ REPORTING_SERVICES := metabase
 AUTOMATION_SERVICES := n8n
 ALL_PROFILES := --profile reporting --profile automation
 UP_WAIT := up -d --wait --wait-timeout 420
-SECRET_KEYS := POSTGRES_PASSWORD METABASE_DB_PASSWORD N8N_DB_PASSWORD MB_ENCRYPTION_SECRET_KEY N8N_ENCRYPTION_KEY ERPNEXT_ADMIN_PASSWORD
+SECRET_KEYS := POSTGRES_PASSWORD METABASE_DB_PASSWORD N8N_DB_PASSWORD MB_ENCRYPTION_SECRET_KEY N8N_ENCRYPTION_KEY ERPNEXT_ADMIN_PASSWORD \
+	REPORTING_READER_PASSWORD
 
 # ERPNext runs from the official frappe_docker pwd.yml. The clone lives OUTSIDE this repository
 # (next to it by default), so it can never be committed here.
@@ -26,7 +27,7 @@ env_value = $$(sed -n 's/^$(1)=//p' .env | tail -n 1 | tr -d '\r')
 .DEFAULT_GOAL := help
 .PHONY: help setup lint format test test-all up up-reporting up-automation up-all stop-reporting \
 	stop-automation down logs ps check-stack db-init env-secrets check-compose \
-	erp-clone erp-preflight erp-pull erp-up erp-setup erp-api-keys erp-seed erp-seed-check erp-down erp-logs erp-ps erp-check
+	erp-clone erp-preflight erp-pull erp-up erp-setup erp-api-keys erp-seed erp-seed-check pipeline-run pipeline-check erp-down erp-logs erp-ps erp-check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -195,3 +196,11 @@ erp-ps: erp-clone ## Show each ERPNext service and its status
 
 erp-check: ## Run the live ERPNext checks
 	@uv run pytest -m integration tests/integration/test_erpnext.py -v
+
+# --- Project 1: ERP-to-reporting pipeline ---------------------------------------------------------
+
+pipeline-run: ## Load ERPNext into Postgres (raw) and build staging + marts with dbt (ARGS="--full" etc.)
+	@uv run python -m pipeline.run $(ARGS)
+
+pipeline-check: ## Run the live pipeline checks (reconciles marts with ERPNext)
+	@uv run pytest -m integration tests/integration/test_pipeline.py -v

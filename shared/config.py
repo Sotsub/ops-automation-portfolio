@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     erpnext_api_key: SecretStr | None = None
     erpnext_api_secret: SecretStr | None = None
 
+    # Reporting database (Postgres). The pipeline and dbt write as the admin role; dashboards read
+    # the marts schema as reporting_reader, which can't see or change anything else.
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "bluefield"
+    postgres_user: str = "bluefield_admin"
+    postgres_password: SecretStr | None = None
+    reporting_reader_password: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,0 +1,56 @@
+version: 2
+
+# Reporting tables. Dashboards read these as reporting_reader. Every number is calculated here.
+models:
+  - name: sales_lines
+    description: "One row per invoiced product line, with revenue, cost and gross margin. Demo data only."
+    columns:
+      - name: line_id
+        description: "ERPNext invoice line id."
+        data_tests: [unique, not_null]
+      - name: revenue
+        description: "Line amount before tax, in USD."
+      - name: cost
+        description: "Quantity times ERPNext's valuation rate at the time of sale, in USD."
+  - name: sales_monthly
+    description: "Monthly revenue, cost and margin by customer group, region and product group. Demo data only."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [invoice_month, customer_group, territory, item_group]
+  - name: ar_open_invoices
+    description: "Unpaid sales invoices and how overdue they are on as_of_date. Demo data only."
+    columns:
+      - name: invoice_id
+        data_tests: [unique, not_null]
+      - name: aging_bucket
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Current", "1-30 days", "31-60 days", "61-90 days", "Over 90 days"]
+  - name: ar_aging
+    description: "Open receivables per aging bucket on as_of_date (all five buckets). Demo data only."
+    columns:
+      - name: aging_bucket
+        data_tests: [unique, not_null]
+  - name: customers
+    description: "Each customer's group, region, revenue, payment habits and open balance. Demo data only."
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: pct_paid_late
+        description: "Share of paid invoices that were paid after their due date, in percent."
+  - name: inventory_status
+    description: "Stock on hand against reorder level, with 90-day demand and days of cover. Demo data only."
+    columns:
+      - name: item_code
+        data_tests: [unique, not_null]
+      - name: stock_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["OK", "Below reorder level", "Out of stock"]
+  - name: supplier_spend_monthly
+    description: "Supplier bills and amounts per month. Demo data only."
+  - name: kpi_summary
+    description: "One row of headline figures for the dashboards. Demo data only."

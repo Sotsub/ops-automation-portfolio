@@ -1,0 +1,72 @@
+version: 2
+
+# Typed views over raw ERPNext data. Transactions keep submitted documents only (docstatus = 1).
+models:
+  - name: stg_customers
+    description: "Customers from ERPNext. Demo data only."
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+  - name: stg_suppliers
+    description: "Suppliers from ERPNext. Demo data only."
+    columns:
+      - name: supplier_id
+        data_tests: [unique, not_null]
+  - name: stg_items
+    description: "Products with default supplier and reorder settings. Demo data only."
+    columns:
+      - name: item_code
+        data_tests: [unique, not_null]
+  - name: stg_stock_levels
+    description: "Stock per product and warehouse (ERPNext Bin). Demo data only."
+    columns:
+      - name: bin_id
+        data_tests: [unique, not_null]
+      - name: item_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('stg_items'), field: item_code}
+  - name: stg_sales_orders
+    description: "Submitted sales orders. Demo data only."
+    columns:
+      - name: sales_order_id
+        data_tests: [unique, not_null]
+  - name: stg_sales_invoices
+    description: "Submitted sales invoices. Demo data only."
+    columns:
+      - name: invoice_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('stg_customers'), field: customer_id}
+  - name: stg_sales_invoice_lines
+    description: "Lines of submitted sales invoices, with cost at ERPNext's valuation. Demo data only."
+    columns:
+      - name: line_id
+        data_tests: [unique, not_null]
+      - name: invoice_id
+        data_tests:
+          - relationships:
+              arguments: {to: ref('stg_sales_invoices'), field: invoice_id}
+      - name: item_code
+        data_tests:
+          - relationships:
+              arguments: {to: ref('stg_items'), field: item_code}
+  - name: stg_purchase_orders
+    description: "Submitted purchase orders. Demo data only."
+    columns:
+      - name: purchase_order_id
+        data_tests: [unique, not_null]
+  - name: stg_purchase_invoices
+    description: "Submitted supplier bills. Demo data only."
+    columns:
+      - name: purchase_invoice_id
+        data_tests: [unique, not_null]
+  - name: stg_payments
+    description: "Submitted payments, one row per invoice each payment settles. Demo data only."
+    columns:
+      - name: payment_reference_id
+        data_tests: [unique, not_null]
