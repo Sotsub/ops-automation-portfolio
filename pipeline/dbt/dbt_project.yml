@@ -1,0 +1,32 @@
+# Bluefield Supply Co. reporting models. Demo data only.
+# raw (loaded by pipeline/extract.py) -> staging (views) -> marts (tables read by dashboards)
+name: bluefield
+version: "1.0.0"
+config-version: 2
+profile: bluefield
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "logs"]
+
+vars:
+  # Date that overdue days and "last 90 days" are measured from. Empty means today.
+  # To pin it, run dbt with --vars '{as_of_date: 2026-10-31}'.
+  as_of_date: ""
+
+models:
+  bluefield:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+      # Dashboards connect as reporting_reader, which may read marts and nothing else.
+      +grants:
+        select: ["reporting_reader"]

@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: erpnext
+    description: >
+      Raw copies of ERPNext records, loaded by pipeline/extract.py. One row per record; the full
+      API response is in `data` (jsonb). Demo data only.
+    schema: raw
+    tables:
+      - {name: erpnext_customer_group}
+      - {name: erpnext_territory}
+      - {name: erpnext_item_group}
+      - {name: erpnext_customer}
+      - {name: erpnext_supplier}
+      - {name: erpnext_item}
+      - {name: erpnext_item_reorder}
+      - {name: erpnext_item_default}
+      - {name: erpnext_bin}
+      - {name: erpnext_sales_order}
+      - {name: erpnext_sales_order_item}
+      - {name: erpnext_sales_invoice}
+      - {name: erpnext_sales_invoice_item}
+      - {name: erpnext_purchase_order}
+      - {name: erpnext_purchase_order_item}
+      - {name: erpnext_purchase_invoice}
+      - {name: erpnext_purchase_invoice_item}
+      - {name: erpnext_payment_entry}
+      - {name: erpnext_payment_entry_reference}

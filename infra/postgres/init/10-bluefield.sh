@@ -5,6 +5,7 @@
 #   - reporting schemas raw, staging, marts, ops in the main database ($POSTGRES_DB)
 #   - a "metabase" role and database for Metabase's own app data
 #   - an "n8n" role and database for n8n's own app data
+#   - a "reporting_reader" role that can only read the marts schema (Project 1)
 #
 # Runs automatically the first time Postgres starts with an empty volume.
 # Safe to rerun at any time (make db-init): every step checks before it creates,
@@ -19,13 +20,16 @@ set -Eeo pipefail
 : "${POSTGRES_DB:?POSTGRES_DB is not set}"
 : "${METABASE_DB_PASSWORD:?METABASE_DB_PASSWORD is not set}"
 : "${N8N_DB_PASSWORD:?N8N_DB_PASSWORD is not set}"
+: "${REPORTING_READER_PASSWORD:?REPORTING_READER_PASSWORD is not set (run make env-secrets, then recreate postgres with make up)}"
 
 psql -v ON_ERROR_STOP=1 --no-psqlrc \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
   -v reporting_db="$POSTGRES_DB" \
   -v metabase_pw="$METABASE_DB_PASSWORD" \
-  -v n8n_pw="$N8N_DB_PASSWORD" <<'SQL'
+  -v n8n_pw="$N8N_DB_PASSWORD" \
+  -v admin_role="$POSTGRES_USER" \
+  -v reader_pw="$REPORTING_READER_PASSWORD" <<'SQL'
 
 -- Reporting schemas for Bluefield business data.
 CREATE SCHEMA IF NOT EXISTS raw;
@@ -60,6 +64,19 @@ REVOKE CONNECT, TEMPORARY ON DATABASE metabase FROM PUBLIC;
 REVOKE CONNECT, TEMPORARY ON DATABASE n8n FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE metabase TO metabase;
 GRANT CONNECT, TEMPORARY ON DATABASE n8n TO n8n;
+
+-- Read-only reporting login (Project 1). It can read marts and nothing else: no raw, staging or
+-- ops data, no writes. Dashboards (and later the AI assistant) use it instead of the admin login.
+SELECT 'CREATE ROLE reporting_reader LOGIN'
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'reporting_reader') \gexec
+ALTER ROLE reporting_reader WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'reader_pw';
+ALTER ROLE reporting_reader SET default_transaction_read_only = on;
+GRANT CONNECT ON DATABASE :"reporting_db" TO reporting_reader;
+REVOKE ALL ON SCHEMA public, raw, staging, ops FROM reporting_reader;
+GRANT USAGE ON SCHEMA marts TO reporting_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA marts TO reporting_reader;
+-- dbt rebuilds the marts tables as the admin role, so new tables must be readable too.
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA marts GRANT SELECT ON TABLES TO reporting_reader;
 SQL
 
-echo "bluefield init: schemas, app roles, and app databases are ready."
+echo "bluefield init: schemas, app roles, app databases, and the reporting reader are ready."
