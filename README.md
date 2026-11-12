@@ -12,7 +12,7 @@ automation (n8n), and AI tools, and controls what the AI is allowed to do.
 | --- | --- | --- |
 | Foundation | `infra/`, `erp/`, `shared/`, `.devcontainer/` | Shared stack (Postgres, Metabase, n8n, Mailpit) and ERPNext run in Codespaces; Compose profiles and dev container added. ERPNext verified live ([evidence](docs/evidence/foundation-erpnext.md)). ERPNext is set up automatically as a US company in USD and seeded with a year of fictional trading by `make erp-seed` ([runbook](erp/README.md), [evidence](docs/evidence/erp-seed-data.md)) |
 | 1. ERP-to-dashboard pipeline | `pipeline/` | Done. ERPNext is loaded incrementally into Postgres, dbt builds tested reporting tables, and two Metabase dashboards are created as code. Every figure reconciles with ERPNext ([runbook](pipeline/README.md), [evidence](docs/evidence/project1-pipeline.md)) |
-| 2. AI reporting assistant | `assistant/` | Not started |
+| 2. AI reporting assistant | `assistant/` | Done. `make ask Q="..."` answers from 9 approved queries over read-only `ai` views (Gemini free tier). Every number in an answer is checked against the query results, and every question is logged. 14/14 evaluation cases pass ([runbook](assistant/README.md), [evidence](docs/evidence/project2-assistant.md)) |
 | 3. Multi-system sync | `sync/` | Not started |
 | 4. Automated department reports | `reports/` | Not started |
 | 5. AI tool evaluation | `eval/` | Not started |
