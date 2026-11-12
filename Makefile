@@ -25,7 +25,7 @@ env_value = $$(sed -n 's/^$(1)=//p' .env | tail -n 1 | tr -d '\r')
 .DEFAULT_GOAL := help
 .PHONY: help setup lint format test test-all up up-reporting up-automation up-all stop-reporting \
 	stop-automation down logs ps check-stack db-init env-secrets check-compose \
-	erp-clone erp-preflight erp-up erp-down erp-logs erp-ps erp-check
+	erp-clone erp-preflight erp-pull erp-up erp-down erp-logs erp-ps erp-check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -121,8 +121,18 @@ erp-preflight:
 		echo "Docker Compose $(ERP_MIN_COMPOSE) or newer is needed (found: $${v:-none})."; exit 1; \
 	fi
 
-erp-up: erp-clone erp-preflight ## Start ERPNext, replace the default admin password, wait until it answers
-	@$(ERP_COMPOSE) up -d
+# pwd.yml uses one image for 8 services. Left to itself, `compose up` pulls it once per service in
+# parallel, and with Docker's containerd image store each pull unpacks its own copy of the layers,
+# which filled a 32 GB Codespace disk. So pull each distinct image once, skipping ones already here.
+erp-pull: erp-clone erp-preflight ## Download each ERPNext image once (skips images already present)
+	@for img in $$($(ERP_COMPOSE) config --images | sort -u); do \
+		docker image inspect "$$img" >/dev/null 2>&1 && continue; \
+		echo "Pulling $$img"; \
+		docker pull -q "$$img" >/dev/null || { echo "Could not pull $$img. Check the network and free disk (df -h /)."; exit 1; }; \
+	done
+
+erp-up: erp-pull ## Start ERPNext, replace the default admin password, wait until it answers
+	@$(ERP_COMPOSE) up -d --pull never
 	@echo "Waiting for create-site to finish. The first run takes several minutes (follow with: make erp-logs)."
 	@cid=$$($(ERP_COMPOSE) ps -a -q create-site); \
 	code=$$(timeout 900 docker wait "$$cid") || { echo "create-site did not finish within 15 minutes."; exit 1; }; \

@@ -164,15 +164,17 @@ From the repository root in the Codespace:
 
 ```bash
 make env-secrets   # adds ERPNEXT_ADMIN_PASSWORD to .env and keeps the existing values
-make erp-up        # clone/pin frappe_docker, start, wait for create-site, set password, wait for /api/method/ping
+make erp-up        # clone/pin frappe_docker, pull each image once, start, wait for create-site, set password, wait for /api/method/ping
 make erp-check     # live checks: ping, the .env password works, the default "admin" is rejected
 ```
 
 The first `make erp-up` downloads the images and creates the site, which can take 5 to 10 minutes.
-It ends with `ERPNext is up: http://localhost:8080`.
+The ERPNext image is about 1 GB to download and 4.6 GB on disk, so check that `df -h /` shows at least
+6 GB free first. It ends with `ERPNext is up: http://localhost:8080`.
 
 Then, in VS Code's **Ports** tab, open port 8080 and keep it **Private**. Log in as `Administrator` with
-`ERPNEXT_ADMIN_PASSWORD` (open `.env` yourself to copy it). Then finish the setup wizard with the company
+`ERPNEXT_ADMIN_PASSWORD` (open `.env` yourself to copy it). The login form's **Email** box also accepts the
+username, so type `Administrator` there. Then finish the setup wizard with the company
 **Bluefield Supply Co.** This is a disposable demo site. Step 6's seed script recreates its data, so don't
 enter anything by hand that you need to keep.
 
@@ -182,6 +184,7 @@ enter anything by hand that you need to keep.
 | Command | What it does |
 | --- | --- |
 | `make erp-up` | Start ERPNext (safe to rerun; an existing site is kept) |
+| `make erp-pull` | Download each ERPNext image once and skip images already present. `make erp-up` runs it first |
 | `make erp-ps` | Show each ERPNext service. `configurator` and `create-site` should be `Exited (0)` |
 | `make erp-logs` | Follow ERPNext logs |
 | `make erp-check` | Run the live checks in `tests/integration/test_erpnext.py` |
@@ -194,6 +197,8 @@ enter anything by hand that you need to keep.
 | `Docker Compose 2.24.4 or newer is needed` | Update Docker Compose. Codespaces images normally already have a newer version. |
 | `ERPNEXT_ADMIN_PASSWORD is blank in .env` | Run `make env-secrets`. |
 | `create-site failed` | Run `make erp-logs` and look at the `create-site` lines. It's usually a timeout waiting for MariaDB on a busy machine. Run `make erp-up` again. |
+| `no space left on device` while pulling or extracting a layer | The disk is full. Check with `df -h /`. Stop the shared stack (`make down`), run `uv cache clean`, then `make erp-up` again. `make erp-pull` downloads each image once, because Compose on its own pulls the shared ERPNext image once per service, and with Docker's containerd image store each of those pulls unpacks its own copy. |
+| `Invalid Login` on the ERPNext login page | Only `Administrator` exists on a new site, and personal email or Google accounts don't work. Type `Administrator` in the Email box and use `ERPNEXT_ADMIN_PASSWORD` from `.env`. `make erp-check` confirms the password works. |
 | `port is already allocated` on 8080 | Something else uses 8080. Set `ERPNEXT_PORT` (and `ERPNEXT_URL`) in `.env` to a free port, then `make erp-up`. |
 | `checkout` error in `erp-clone` | The clone at `../frappe_docker` has local edits. This repo never edits it, so run `git -C ../frappe_docker status` and discard the changes. |
 | The setup wizard was finished wrong, or you want a fresh site | `docker compose -p bluefield-erp -f ../frappe_docker/pwd.yml -f infra/erpnext/compose.override.yml --env-file .env down -v` **deletes the ERPNext site and database**, then `make erp-up`. |

@@ -9,7 +9,7 @@ import re
 import pytest
 import yaml
 
-from tests.helpers import ROOT, env_example_values, make_variable
+from tests.helpers import ROOT, env_example_values, make_rule, make_variable
 
 OVERRIDE_PATH = ROOT / "infra" / "erpnext" / "compose.override.yml"
 STACK_COMPOSE_PATH = ROOT / "infra" / "docker-compose.yml"
@@ -86,3 +86,17 @@ def test_erpnext_uses_its_own_compose_project():
     assert '-f "$(FRAPPE_DOCKER_DIR)/pwd.yml" -f infra/erpnext/compose.override.yml' in erp_compose
     stack_name = yaml.safe_load(STACK_COMPOSE_PATH.read_text(encoding="utf-8"))["name"]
     assert stack_name != "bluefield-erp"
+
+
+def test_erp_pull_downloads_each_image_once():
+    # pwd.yml reuses one image across 8 services; pulling per service filled the Codespace disk.
+    prereqs, recipe = make_rule("erp-pull")
+    assert {"erp-clone", "erp-preflight"} <= set(prereqs)
+    assert "config --images | sort -u" in recipe
+    assert "docker image inspect" in recipe, "images already present must be skipped on rerun"
+
+
+def test_erp_up_pulls_first_and_never_lets_compose_pull():
+    prereqs, recipe = make_rule("erp-up")
+    assert "erp-pull" in prereqs
+    assert "up -d --pull never" in recipe

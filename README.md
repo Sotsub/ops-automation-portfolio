@@ -10,7 +10,7 @@ automation (n8n), and AI tools, and controls what the AI is allowed to do.
 
 | Part | Folder | Status |
 | --- | --- | --- |
-| Foundation | `infra/`, `erp/`, `shared/`, `.devcontainer/` | Shared stack (Postgres, Metabase, n8n, Mailpit) and ERPNext run in Codespaces; Compose profiles and dev container added. Next: seed data |
+| Foundation | `infra/`, `erp/`, `shared/`, `.devcontainer/` | Shared stack (Postgres, Metabase, n8n, Mailpit) and ERPNext run in Codespaces; Compose profiles and dev container added. ERPNext verified live, with the setup wizard done for Bluefield Supply Co. ([evidence](docs/evidence/foundation-erpnext.md)). Next: seed data |
 | 1. ERP-to-dashboard pipeline | `pipeline/` | Not started |
 | 2. AI reporting assistant | `assistant/` | Not started |
 | 3. Multi-system sync | `sync/` | Not started |

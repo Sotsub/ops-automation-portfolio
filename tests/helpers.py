@@ -27,6 +27,14 @@ def make_variable(name: str) -> str:
     return match.group(1).strip()
 
 
+def make_rule(target: str) -> tuple[list[str], str]:
+    """Return a Makefile target's prerequisites and its recipe text (the tab-indented lines)."""
+    text = MAKEFILE.read_text(encoding="utf-8")
+    match = re.search(rf"^{re.escape(target)}:(?!=)([^#\n]*).*\n((?:\t.*\n?)*)", text, re.MULTILINE)
+    assert match, f"Makefile does not define the target {target}"
+    return match.group(1).split(), match.group(2)
+
+
 def make_targets() -> set[str]:
     """Return every target name defined at the start of a Makefile line."""
     text = MAKEFILE.read_text(encoding="utf-8")
